@@ -50,6 +50,9 @@ class Module:
         # Weight gradient list and number --> normalized weight gradient list
         raise NotImplementedError
 
+    def dualize_norm(self, target_norm=1.0, depth=0):
+        print('\t' * depth + type(self).__name__ + ':', target_norm)
+
     def __matmul__(self, other):
         if isinstance(other, tuple):
             other = TupleModule(other)
@@ -94,6 +97,9 @@ class Bond(Module):
     def dualize(self, grad_w, target_norm=1.0):
         return []
 
+    def dualize_norm(self, target_norm=1.0, depth=0):
+        pass
+
 class CompositeModule(Module):
     def __init__(self, m1, m0):
         super().__init__()
@@ -134,6 +140,13 @@ class CompositeModule(Module):
         else:
             d_w = [0 * grad_weight for grad_weight in grad_w]
         return d_w
+
+    def dualize_norm(self, target_norm=1.0, depth=0):
+        super().dualize_norm(target_norm, depth)
+        if self.mass > 0:
+            m0, m1 = self.children
+            m0.dualize_norm(target_norm = target_norm * m0.mass / self.mass / m1.sensitivity, depth=depth + 1)
+            m1.dualize_norm(target_norm = target_norm * m1.mass / self.mass, depth=depth + 1)
 
 class TupleModule(Module):
     def __init__(self, python_tuple_of_modules):
@@ -179,6 +192,12 @@ class TupleModule(Module):
         else:
             d_w = [0 * grad_weight for grad_weight in grad_w]
         return d_w
+
+    def dualize_norm(self, target_norm=1.0, depth=0):
+        super().dualize_norm(target_norm, depth)
+        if self.mass > 0:
+            for m in self.children:
+                m.dualize_norm(target_norm = target_norm * m.mass / self.mass, depth=depth + 1)
 
 class Identity(Bond):
     def __init__(self):
