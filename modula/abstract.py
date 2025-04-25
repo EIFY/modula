@@ -14,7 +14,7 @@ class Module:
         self.mass = None            # proportional contribution of module toward feature learning of any supermodule: float >= 0
 
     def __str__(self):
-        string = self.__class__.__name__
+        string = getattr(self, 'name', type(self).__name__)
         string += f"\n...consists of {self.atoms} atoms and {self.bonds} bonds"
         string += f"\n...{'smooth' if self.smooth else 'non-smooth'}"
         string += f"\n...input sensitivity is {self.sensitivity}"
@@ -51,7 +51,7 @@ class Module:
         raise NotImplementedError
 
     def dualize_norm(self, target_norm=1.0, depth=0):
-        print('\t' * depth + type(self).__name__ + ':', target_norm)
+        print('\t' * depth + getattr(self, 'name', type(self).__name__) + ':', target_norm)
 
     def __matmul__(self, other):
         if isinstance(other, tuple):
@@ -70,7 +70,12 @@ class Module:
 
     def __pow__(self, n):
         assert n >= 0 and n % 1 == 0, "nonnegative integer powers only"
-        return copy.deepcopy(self) @ (self ** (n-1)) if n > 0 else Identity()
+        name = getattr(self, 'name', type(self).__name__)
+        top_copy = copy.deepcopy(self)
+        top_copy.name = name + '_' + str(n)
+        ret = top_copy @ (self ** (n-1)) if n > 0 else Identity()
+        ret.name = '_'.join((name, 'composite', str(n)))
+        return ret
 
     def __call__(self, x, w):
         return self.forward(x, w)

@@ -76,8 +76,12 @@ def ViT(num_classes, image_size=(28, 28), patch_size=(7, 7), num_heads=4, d_embe
         att = att @ ln
         mlp = mlp @ ln
     att_block = (1-1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * att
+    att_block.name = 'att_block'
     mlp_block = (1-1/(2*num_blocks)) * Identity() + 1/(2*num_blocks) * mlp
-    blocks = (mlp_block @ att_block) ** num_blocks
+    mlp_block.name = 'mlp_block'
+    encoder_block = mlp_block @ att_block
+    encoder_block.name = 'encoder_block'
+    blocks = encoder_block ** num_blocks
     blocks.tare(absolute=blocks_mass)
 
     gap = Mean(axis=1, size=h * w)
