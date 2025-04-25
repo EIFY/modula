@@ -61,6 +61,7 @@ def ViT(num_classes, image_size=(28, 28), patch_size=(7, 7), num_heads=4, d_embe
     patchify = Linear(d_embed, p1 * p2 * channels) @ Patchify(patch_size)
     if bias:
         patchify = patchify + Bias(d_embed)
+    patchify.name = 'embedding'
     posemb = Constant(lambda: posemb_sincos_2d(h, w, d_embed))
 
     att = Attention(num_heads, d_embed, d_query, d_value, attention_scale, causal=False, posemb="none", bias=bias)
@@ -86,8 +87,39 @@ def ViT(num_classes, image_size=(28, 28), patch_size=(7, 7), num_heads=4, d_embe
 
     gap = Mean(axis=1, size=h * w)
     out = final_scale * (Linear(num_classes, d_embed) + Bias(num_classes) if bias else Linear(num_classes, d_embed))
+    out.name = 'head'
 
     ret = blocks @ (patchify + posemb)
     if LN:  # Final LN
         ret = ln @ ret
     return out @ gap @ ret
+
+def extract_target_norm(vit):
+    extract = lambda a: (type(a).__name__, a.target_norm)
+    ret = {}
+    def extract_add(m):
+        t, add = m.children
+        return t.children
+    def extract_ln(prefix, ln):
+        ln, scale_bias = ln.children
+        scale, bias = extract_add(scale_bias)
+        ret[prefix + 'bias'] = extract(bias)
+        ret[prefix + 'scale'] = extract(scale)
+    headless, pool_head = vit.children
+    pool, head = pool_head.children
+    assert head.name == 'head'
+    head, mul = head.children
+    head_tuple, add = head.children
+    kernel, bias = head_tuple.children
+    ret['head/bias'] = extract(bias)
+    ret['head/kernel'] = extract(kernel)
+    headless, final_ln = headless.children
+    extract_ln('Transformer/encoder_norm/', final_ln)
+    embedding, transformer = headless.children
+    patchify, posemb = extract_add(embedding)
+    assert patchify.name == 'embedding'
+    patchify, bias = extract_add(patchify)
+    ret['embedding/bias'] = extract(bias)
+    rearrange, patchify = patchify.children
+    ret['embedding/kernel'] = extract(patchify)
+    return ret

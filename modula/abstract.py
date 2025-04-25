@@ -51,6 +51,7 @@ class Module:
         raise NotImplementedError
 
     def dualize_norm(self, target_norm=1.0, depth=0):
+        self.target_norm = target_norm
         print('\t' * depth + getattr(self, 'name', type(self).__name__) + ':', target_norm)
 
     def __matmul__(self, other):
