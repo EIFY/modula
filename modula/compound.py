@@ -105,6 +105,44 @@ def extract_target_norm(vit):
         scale, bias = extract_add(scale_bias)
         ret[prefix + 'bias'] = extract(bias)
         ret[prefix + 'scale'] = extract(scale)
+    def extract_kernel_bias(prefix, m):
+        kernel, bias = extract_add(m)
+        ret[prefix + 'bias'] = extract(bias)
+        ret[prefix + 'kernel'] = extract(kernel)
+    def extract_att(prefix, att):
+        v_score, apply_att_out = att.children
+        apply_att, w = apply_att_out.children
+        merge_head, w = w.children
+        extract_kernel_bias(prefix + 'out/', w)
+        v, score = v_score.children
+        v, split_head = v.children
+        extract_kernel_bias(prefix + 'value/', v)
+        attn, softmax = score.children
+        qk, attn_qk = attn.children
+        q, k = qk.children
+        q, split_head = q.children
+        extract_kernel_bias(prefix + 'query/', q)
+        k, split_head = k.children
+        extract_kernel_bias(prefix + 'key/', k)
+    def extract_mlp(prefix, mlp):
+        mlp0, gelu_mlp1 = mlp.children
+        extract_kernel_bias(prefix + 'Dense_0/', mlp0)
+        gelu, mlp1 = gelu_mlp1.children
+        extract_kernel_bias(prefix + 'Dense_1/', mlp1)
+    def extract_encoder_block(b):
+        l = b.name.split('_')
+        n = int(l[-1])
+        att_b, mlp_b = b.children
+        res, att = extract_add(att_b)
+        att, mul = att.children
+        ln, att = att.children
+        extract_ln(f"Transformer/encoderblock_{n}/LayerNorm_0/", ln)
+        extract_att(f"Transformer/encoderblock_{n}/MultiHeadDotProductAttention_0/", att)
+        res, mlp = extract_add(mlp_b)
+        mlp, mul = mlp.children
+        ln, mlp = mlp.children
+        extract_ln(f"Transformer/encoderblock_{n}/LayerNorm_1/", ln)
+        extract_mlp(f"Transformer/encoderblock_{n}/MlpBlock_0/", mlp)
     headless, pool_head = vit.children
     pool, head = pool_head.children
     assert head.name == 'head'
@@ -122,4 +160,8 @@ def extract_target_norm(vit):
     ret['embedding/bias'] = extract(bias)
     rearrange, patchify = patchify.children
     ret['embedding/kernel'] = extract(patchify)
+    top = transformer
+    while type(top) is CompositeModule:
+        top, last = top.children
+        extract_encoder_block(last)
     return ret

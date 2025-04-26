@@ -73,9 +73,9 @@ class Module:
         assert n >= 0 and n % 1 == 0, "nonnegative integer powers only"
         name = getattr(self, 'name', type(self).__name__)
         top_copy = copy.deepcopy(self)
-        top_copy.name = name + '_' + str(n)
-        ret = top_copy @ (self ** (n-1)) if n > 0 else Identity()
-        ret.name = '_'.join((name, 'composite', str(n)))
+        top_copy.name = name + '_' + str(n - 1)
+        ret = top_copy @ (self ** (n - 1)) if n > 0 else Identity()
+        ret.name = '_'.join((name, 'composite', str(n - 1)))
         return ret
 
     def __call__(self, x, w):
